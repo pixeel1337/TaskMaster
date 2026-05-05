@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<head>
+    <h1>Lista zadań</h1>
+</head>
+
+<body>
+    <form action="/sorted" method="POST">'
+        <select name="Sorting">
+        <option value="Rosnąco"><a href="/sorted/asc">Rosnąco</a></option>
+        <option value="Malejąco"><a href="/sorted/desc">Malejąco</a></option>
+    </select>
+    </form>
+
+    <ul>
+        <% if(tasks.length !== 0) { %>
+        <%    tasks.forEach(function(p, i) { %>
+                <li><b><%= p.text %></b> | Priorytet: <%= p.priority %> </li>
+                <form action="/delete" method="POST">
+                    <input type="hidden" name="index" value="<%= i %>">
+                    <button type="submit">Usuń</button>
+                </form>
+                <!-- <form action="/clear" method="POST">
+                    <input type="hidden" name="index" value="<%= i %>">
+                    <button type="submit">Wyczyść wszystko</button>
+                </form> -->
+        <% }) %>
+        <% } else { %> 
+            <p>Brak zadań do wykonania</p>
+        <% } %>
+    </ul>
+
+    <form action="/add" method="POST">
+        <input type="text" name="taskText" placeholder="Co jest do zrobienia" required>
+        <select name="taskPriority" selected="Priorytet">
+            <option value="Niski">Niski</option>
+            <option value="Średni">Średni</option>
+            <option value="Wysoki">Wysoki</option>
+        </select>
+        <button type="submit">Dodaj</button>
+    </form><br>
+
+    <form action="/clear" method="POST" onsubmit="return confirm('Czy na pewno?');">
+        <button type="submit">Wyczyść wszystko</button>
+    </form>
+
+    
+    
+    
+
+
+</body>
+
+</html>
