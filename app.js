@@ -1,19 +1,30 @@
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
 const app = express();
 
-app.set("view engine", "ejs");
-app.use(express.urlencoded({ extended: true }));
-
-const db = new sqlite3.Database("./zadania.db", (err) => {
-    if (err) console.error(err.message);
+const knex = require("knex")({
+    client: "sqlite3",
+    connection: {
+        filename: "./baza.db"
+    },
+    useNullAsDeafult: true
 });
 
-db.run(`CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    text TEXT NOT NULL, 
-    priority TEXT NOT NULL
-)`);
+app.set("view engine", "ejs");
+app.use(express.json());
+app.use(express.urlencoded({extended: true}));
+
+async function initDatabase(params) {
+    const hasTable = await knex.schema.hasTable("tasks");
+    if (!hasTable) {
+        await knex.schema.createTable("tasks", table => {
+            table.increments("id").primary();
+            table.string("text").notNullable();
+            table.string("priority");
+        });
+        console.log("Tabela tasks została utworzona");
+    }
+}
+initDatabase();
 
 const wagiSQL = `CASE priority
     WHEN 'Wysoki' THEN 3
@@ -21,50 +32,73 @@ const wagiSQL = `CASE priority
     WHEN 'Niski' THEN 1
     END`;
 
-app.get("/", (req, res) => {
-   db.all("SELECT * FROM tasks", [], (err, rows) => {
-        if (err) console.error(err.message);
-        res.render("index", {tasks: rows});
-   }); 
+app.get("/tasks", async (req, res) => {
+    try {
+        const allTasks = await knex("tasks").select("*");
+        res.json(allTasks);
+    } catch(err) {
+        res.status(500).json({error: "Nie udało się pobrać zadań: " + err.message});
+    }
 });
 
-app.post("/add", (req, res) => {
-    const {taskText, taskPriority} = req.body;
-
-    const sql = "INSERT INTO tasks (text, priority) VALUES (?, ?)";
-    db.run(sql, [taskText, taskPriority], (err) => {
-        if (err) console.error(err.message);
-        res.redirect("/"); 
-    });
+app.post("/tasks", async(req, res) => {
+    try {
+        const {text, priority} = req.body;
+        const [newID] = await knex("tasks").insert({
+            text: text,
+            priority: priority
+        });
+        res.status(201).json({
+            id: newID,
+            text: text,
+            priority: priority,
+            message: "Dodano zadanie!"
+        });
+    } catch(err) {
+        res.status(500).json({error: "Nie udało się dodać zadania: " + err.message});
+    }
 });
 
-app.post("/delete", (req, res) => {
-    const taskID = req.body.index;
-    
-    const sql = "DELETE FROM tasks WHERE id = ?";
-    db.run(sql, taskID, (err) => {
-        if (err) console.error(err.message);
-        res.redirect("/");
-    });
-});    
-
-app.post("/clear", (req, res) => {
-    const sql ="DELETE FROM tasks";
-    db.run(sql, (err) => {
-        if (err) console.error(err.message);
-        res.redirect("/");
-    });
+app.delete("/tasks/:id", async(req, res) => {
+    try {
+        const taskID = req.params.id;
+        const rowsAffected = await knex("tasks").where("id", taskID).del();
+        if(rowsAffected > 0) {
+            res.json({
+                message: "Zadanie usunięte pomyślnie!",
+                id: taskID
+            });
+        } else {
+            res.status(404).json({error: "Nie znaleziono zadania o podanym ID"});
+        }
+    } catch(err) {
+        res.status(500).json({error: "Nie udało się usunąć zadania " + err.message});
+    }
 });
 
-app.post("/sorted/:order", (req, res) => {
-    const order = req.params.order === "desc" ? "DESC" : "ASC";
-    const sql = `SELECT * FROM tasks ORDER BY ${wagiSQL} ${order}`;
+app.put("/tasks/:id", async(req, res) => {
+    try {
+        const taskID = req.params.id;
+        const {text, priority} = req.body;
+        const rowsAffected = await knex("tasks").where("id", taskID).update({
+            text: text,
+            priority: priority
+        });
 
-    db.all(sql, [], (err, rows) => {
-        if (err) console.error(err.message);
-        res.render("index", {tasks: rows});
-    });
+        if (rowsAffected > 0) {
+            res.json({
+                message: "Zadanie zaktualizowane!",
+                id: taskID,
+                updatedData: {text, priority}
+            });
+        } else {
+            res.status(404).json({error: "Nie znaleziono zadania o podanym ID"});
+        }
+    } catch(err) {
+        res.status(500).json({error: "Nie udało się usunąć zadania" + err.message});
+    }
 });
+
 
 app.listen(3000, () => console.log("Serwer działa!"));
 
